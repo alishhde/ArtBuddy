@@ -1,9 +1,8 @@
 from src.core.utils import Utils
+from src.core.database import DatabaseCore
+from src.core.logging_config import setup_logging
 
-from datetime import datetime
 from openai import OpenAI
-import requests
-import os
 import logging
 
 # Get logger for this module
@@ -15,6 +14,7 @@ class ModelCore:
                        utils: Utils,
                        image_model_name: str,
                        API_TOKEN: str,
+                       database: DatabaseCore,
                        verbose: bool):
         """
         Initialize the model core.
@@ -31,17 +31,10 @@ class ModelCore:
         self.image_model_name = image_model_name
         self.API_TOKEN = API_TOKEN
         self.verbose = verbose
+        self.database = database
 
         # Configure logging based on verbose mode
-        if self.verbose:
-            logging.basicConfig(
-                level=logging.DEBUG,
-                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                datefmt='%Y-%m-%d %H:%M:%S'
-            )
-        else:
-            # Disable all logging when not verbose
-            logging.disable(logging.CRITICAL)
+        setup_logging(verbose=self.verbose)
         
         if self.model_provider.lower() == "openai":
             logger.info("Loading OpenAI model!")
@@ -52,7 +45,7 @@ class ModelCore:
             raise
 
 
-    def imageGenerator(self, prompt: str, size: str = "1024x1024", quality: str = "low") -> tuple[str, str]:
+    def imageGenerator(self, prompt: str, size: str = "1024x1024", quality: str = "low", save_path: str="data/generated_images") -> tuple[str, str]:
         """
         Generate an image from a prompt using OpenAI's DALL-E 3 model.
         
@@ -67,35 +60,48 @@ class ModelCore:
         Raises:
             Exception: If image generation fails
         """
+        # Format the prompt
+        formatted_prompt, original_prompt = self.promptFormatter(task="image_generation", prompt=prompt)
+
+        # Save user's prompt to database
+        self.database.conversation_saver(
+            data={
+                'role': 'user',
+                'text': original_prompt
+            },
+            data_table='conversations'
+        )
+        logger.info("User's image generation prompt saved to database")
+
         try:
-            logger.info(f"Generating image with prompt: {prompt}")
+            logger.info(f"Generating image with prompt: {formatted_prompt}")
             
             # Generate the image
             response = self.client.images.generate(
                 model=self.image_model_name,
-                prompt=prompt,
+                prompt=formatted_prompt,
                 n=1,
                 size=size,
                 # quality=quality
             )
             image_url = response.data[0].url
 
-            # Create a filename based on timestamp and prompt
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            safe_prompt = "".join(x for x in prompt[:30] if x.isalnum() or x in (' ', '-', '_')).strip()
-            filename = f"{timestamp}_{safe_prompt}.png"
-            save_path = os.path.join("data", "generated_images", filename)
-
-            # Download and save the image
-            logger.info(f"Downloading image to {save_path}")
-            
-            response = requests.get(image_url)
-            response.raise_for_status()
-            
-            with open(save_path, 'wb') as f:
-                f.write(response.content)
-            
+            # Save the image to the local directory
+            self.utils.imgSaver(image_url=image_url, formatted_prompt=formatted_prompt, save_path=save_path)
             logger.info(f"Image saved successfully to {save_path}")
+
+            # Encode the generated image to base64
+            base64_image = self.utils.encode_image(image_path=save_path)
+
+            # Save the generated image to database
+            self.database.conversation_saver(
+                data={
+                    'role': 'system',
+                    'image': base64_image
+                },
+                data_table='conversations'
+            )
+            logger.info("Generated image saved to database")
 
             return image_url, save_path
         except Exception as e:
@@ -117,7 +123,21 @@ class ModelCore:
         logger.info(f"Processing image chat with prompt: {prompt}")
         logger.info(f"Using image from path: {image_path}")
 
-        base64_image = self.utils.encode_image(image_path=image_path)
+        base64_image = self.utils.encode_image(image_path=image_path) 
+
+        # Format the prompt
+        formatted_prompt, original_prompt = self.promptFormatter(task="chattingImage", prompt=prompt, image_path=image_path)
+
+        # Save user's original prompt and image to database
+        self.database.conversation_saver(
+            data={
+                'role': 'user',
+                'text': original_prompt,
+                'image': base64_image
+            },
+            data_table='conversations'
+        )
+        logger.info("User's original prompt and image saved to database")
 
         try:
             response = self.client.chat.completions.create(
@@ -128,7 +148,7 @@ class ModelCore:
                         "content": [
                             {
                                 "type": "text",
-                                "text": prompt
+                                "text": formatted_prompt
                             },
                             {
                                 "type": "image_url",
@@ -141,7 +161,18 @@ class ModelCore:
                 ]
             )
             result = response.choices[0].message.content
-            logger.info(f"Generated response: {result}")
+            logger.info(f"Model has generated a response: {result}")
+
+            # Save system's response to database
+            self.database.conversation_saver(
+                data={
+                    'role': 'system',
+                    'text': result
+                },
+                data_table='conversations'
+            )
+            logger.info("System's response saved to database")
+
             return result
         except Exception as e:
             logger.error(f"Failed to generate response: {str(e)}")
@@ -160,24 +191,66 @@ class ModelCore:
         """
         logger.info(f"Processing chat with prompt: {prompt}")
 
+        # Format the prompt
+        formatted_prompt, original_prompt = self.promptFormatter(task="chatting", prompt=prompt)
+
+        # Save user's prompt to database before being processed
+        self.database.conversation_saver(
+            data={
+                'role': 'user',
+                'text': original_prompt
+            },
+            data_table='conversations'
+        )
+        logger.info(f"User's original prompt saved to database")
+
         try:
+            logger.info(f"Model is processing user's prompt: {prompt}")
             response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
                     {
                         "role": "user", 
-                        "content": prompt
+                        "content": formatted_prompt
                     }
                 ],
                 temperature=0.7,
                 max_tokens=512
             )
             result = response.choices[0].message.content
-            logger.info(f"Generated response: {result}")
+            logger.info(f"Model has generated a response: {result}")
+
+            # Save system's response to database
+            self.database.conversation_saver(
+                data={
+                    'role': 'system',
+                    'text': result
+                },
+                data_table='conversations'
+            )
+            logger.info(f"System's response saved to database")
+
             return result
         except Exception as e:
             logger.error(f"Failed to generate response: {str(e)}")
             raise
+
+
+    def promptFormatter(self, task: str, prompt: str, image_path: str = None) -> str:
+        """
+        Format the prompt for the model.
+
+        Args:
+            task: The task to format the prompt for
+            prompt: The prompt to format
+            image_path: The path to the image to analyze
+
+        Returns:
+            str: The formatted prompt
+        """
+        original_prompt = prompt
+
+        return prompt, original_prompt
 
 
     def loadOpenAIClient(self) -> OpenAI:

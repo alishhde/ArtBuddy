@@ -2,7 +2,10 @@ from src.core.model import ModelCore
 from src.core.agent import AgentCore
 from src.core.tools import WebAgentTools
 from src.core.utils import Utils
+from src.core.database import DatabaseCore
+from src.core.logging_config import setup_logging
 
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
 import logging
@@ -13,15 +16,7 @@ load_dotenv(override=True)
 verbose = bool(os.getenv("VERBOSE").lower() == "true") 
 
 # Configure logging based on verbose mode
-if verbose:
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-else:
-    # Disable all logging when not verbose
-    logging.disable(logging.CRITICAL)
+setup_logging(verbose=verbose)
 logger = logging.getLogger(__name__)
 
 
@@ -37,13 +32,17 @@ class ArtBuddy:
         self.utils_loader()
         logger.info("Utils loaded!")
 
+        # ==== Load Database ==== #
+        self.database_handler()
+        logger.info("Database loaded!")
+
         # ==== Load Model ==== #
         self.model_handler()
         logger.info("Model loaded!")
 
         # ==== Load Tools ==== #
         self.tools_handler()
-        logger.info("Tools loaded!")    
+        logger.info("Tools loaded!")
 
         # ==== Load Agent ==== #
         self.agent_handler()
@@ -74,12 +73,23 @@ class ArtBuddy:
         logger.info(f"Verbosity: {self.verbosity} -> type: {type(self.verbosity)}")
         
         logger.info("Environment variables loaded!")
+
+        self.database_type = os.getenv("DATABASE_TYPE")
+        logger.info(f"Database Type: {self.database_type} -> type: {type(self.database_type)}")
+        self.database_path = os.getenv("DATABASE_PATH")
+        logger.info(f"Database Path: {self.database_path} -> type: {type(self.database_path)}")
         
 
     def utils_loader(self):
         logger.info("Loading Utils - - -")
-        self.utils = Utils()
+        self.utils = Utils(verbose=self.verbose)
         logger.info("Utils loaded!")
+
+
+    def database_handler(self):
+        logger.info("Loading Database - - -")
+        self.database = DatabaseCore(verbose=self.verbose, database_type=self.database_type, database_path=self.database_path)
+        logger.info("Database loaded!")
 
 
     def model_handler(self):
@@ -90,6 +100,7 @@ class ArtBuddy:
             utils=self.utils,
             image_model_name=self.image_model_name,
             API_TOKEN=self.API_TOKEN,
+            database=self.database,
             verbose=self.verbose
             )
         logger.info("Model loaded!")
@@ -107,7 +118,8 @@ class ArtBuddy:
             planning_interval=self.planning_interval, 
             max_steps=self.max_steps, 
             verbosity_level=self.verbosity, 
-            verbose=self.verbose
+            verbose=self.verbose,
+            database=self.database
             )
         logger.info("Agent loaded!")
 

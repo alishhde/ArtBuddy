@@ -1,5 +1,7 @@
 from src.core.model import ModelCore
 from src.core.utils import Utils
+from src.core.database import DatabaseCore
+from src.core.logging_config import setup_logging
 
 from smolagents import CodeAgent, OpenAIServerModel, DuckDuckGoSearchTool, Tool
 
@@ -11,7 +13,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 class AgentCore:
-    def __init__(self, model_instance: ModelCore, utils: Utils, tools: list[Tool], planning_interval: int, max_steps: int, verbosity_level: int, verbose: bool):
+    def __init__(self, model_instance: ModelCore, 
+                       utils: Utils, 
+                       tools: list[Tool], 
+                       planning_interval: int, 
+                       max_steps: int, 
+                       verbosity_level: int, 
+                       verbose: bool,
+                       database: DatabaseCore):
         """
         Initialize the AgentCore class.
 
@@ -23,48 +32,18 @@ class AgentCore:
             max_steps: The maximum number of steps the agent can take.
             verbosity_level: The verbosity level of the agent.
             verbose: The verbose level of the agent.
+            database: The database to use.
         """
         # Configure logging based on verbosity level
-        if verbose:
-            logging.basicConfig(
-                level=logging.DEBUG,
-                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                datefmt='%Y-%m-%d %H:%M:%S'
-            )
-        else:
-            # Disable all logging when not verbose
-            logging.disable(logging.CRITICAL)
+        setup_logging(verbose=verbose)
 
         logger.info("Initializing AgentCore - - -")
         self.model_handler = model_instance
         self.serverModel = self.loadModel()
         self.tools = tools
+        self.database = database
         self.managerAgent = self.agentManager(planning_interval, verbosity_level, max_steps)
         logger.info("AgentCore initialized successfully!")
-
-
-    def runAgent(self, prompt: str, history: list[str]) -> str:
-        """
-        Run the agent.
-
-        Args:
-            prompt: The prompt to use.
-            history: The history of the conversation.
-        """
-        logger.info(f"Running agent with prompt: {prompt}")
-        result = self.managerAgent.run(prompt, history)
-        logger.info("Agent execution completed")
-        return result
-
-
-    def loadModel(self) -> OpenAIServerModel:
-        """
-        Load the model acceptable by the SmolAgents CodeAgent.
-        """
-        logger.info("Loading server model...")
-        model = OpenAIServerModel(model_id=self.model_handler.model_name)
-        logger.info("Server model loaded successfully")
-        return model
 
 
     def agentManager(self, planning_interval: int, verbosity_level: int, max_steps: int) -> CodeAgent:
@@ -101,7 +80,7 @@ class AgentCore:
         logger.info("Loading web agent - - -")
         agent = CodeAgent(
             model=self.serverModel,
-            tools=[],
+            tools=[DuckDuckGoSearchTool()],
             name="Web_Agent",
             description="A Web Agent that can search the web for information.",
             verbosity_level=verbosity_level,
@@ -109,3 +88,27 @@ class AgentCore:
         )
         logger.info("Web agent loaded successfully!")
         return agent
+
+
+    def runAgent(self, prompt: str, history: list[str]) -> str:
+        """
+        Run the agent.
+
+        Args:
+            prompt: The prompt to use.
+            history: The history of the conversation.
+        """
+        logger.info(f"Running agent with prompt: {prompt}")
+        result = self.managerAgent.run(prompt, history)
+        logger.info("Agent execution completed")
+        return result
+
+
+    def loadModel(self) -> OpenAIServerModel:
+        """
+        Load the model acceptable by the SmolAgents CodeAgent.
+        """
+        logger.info("Loading server model...")
+        model = OpenAIServerModel(model_id=self.model_handler.model_name)
+        logger.info("Server model loaded successfully")
+        return model
