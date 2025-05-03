@@ -3,6 +3,8 @@ from src.core.agent import AgentCore
 from src.core.database import DatabaseCore
 from src.core.utils import Utils
 from src.core.logging_config import setup_logging
+from src.core.prompts import Prompts
+
 import logging
 from datetime import datetime
 
@@ -10,11 +12,12 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 class Runner:
-    def __init__(self, model: ModelCore, agent: AgentCore, database: DatabaseCore, utils: Utils, verbose: bool):
+    def __init__(self, model: ModelCore, agent: AgentCore, database: DatabaseCore, utils: Utils, prompts: Prompts, verbose: bool):
         self.model = model
         self.agent = agent
         self.database = database
         self.utils = utils
+        self.prompts = prompts
 
         self.verbose = verbose
         setup_logging(verbose=verbose)
@@ -43,7 +46,7 @@ class Runner:
         retriever = self.database.idea_retriever(num_rows=1)
         last_idea = retriever[0]['ideas'][0]
 
-        processed_prompt, _ = self.model.promptFormatter(task="generatingImageWithIdeas", prompt=[user_prompt, last_idea])
+        processed_prompt, _ = self.prompts.promptFormatter(task="generatingImageWithIdeas", prompt=[user_prompt, last_idea])
 
         # Run the model
         return self.model.imageGenerator(processed_prompt)
@@ -97,7 +100,7 @@ class Runner:
         top_k_conversations = self.database.conversation_retriever(basedOnDate=True, top_k=top_k, exclude_image=True)
         
         # Calling model to sum up the text and return a prompt shape ideas of everything discussed in the conversations
-        prompt_with_conversations, _ = self.model.promptFormatter(task="sumUpIdeas", prompt=top_k_conversations)
+        prompt_with_conversations, _ = self.prompts.promptFormatter(task="sumUpIdeas", prompt=top_k_conversations)
 
         # Running model to summarize the prompt conversations
         model_summarized_ideas = self.model.chatting(prompt_with_conversations)

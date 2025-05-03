@@ -1,6 +1,7 @@
 from src.core.utils import Utils
 from src.core.database import DatabaseCore
 from src.core.logging_config import setup_logging
+from src.core.prompts import Prompts
 
 from openai import OpenAI
 import logging
@@ -15,6 +16,7 @@ class ModelCore:
                        image_model_name: str,
                        API_TOKEN: str,
                        database: DatabaseCore,
+                       prompts: Prompts,
                        verbose: bool):
         """
         Initialize the model core.
@@ -32,6 +34,7 @@ class ModelCore:
         self.API_TOKEN = API_TOKEN
         self.verbose = verbose
         self.database = database
+        self.prompts = prompts
 
         # Configure logging based on verbose mode
         setup_logging(verbose=self.verbose)
@@ -61,7 +64,7 @@ class ModelCore:
             Exception: If image generation fails
         """
         # Format the prompt
-        formatted_prompt, original_prompt = self.promptFormatter(task="image_generation", prompt=prompt)
+        formatted_prompt, original_prompt = self.prompts.promptFormatter(task="image_generation", prompt=prompt)
 
         # Save user's prompt to database
         self.database.conversation_saver(
@@ -126,7 +129,7 @@ class ModelCore:
         base64_image = self.utils.encode_image(image_path=image_path) 
 
         # Format the prompt
-        formatted_prompt, original_prompt = self.promptFormatter(task="chattingImage", prompt=prompt, image_path=image_path)
+        formatted_prompt, original_prompt = self.prompts.promptFormatter(task="chattingImage", prompt=prompt, image_path=image_path)
 
         # Save user's original prompt and image to database
         self.database.conversation_saver(
@@ -192,7 +195,7 @@ class ModelCore:
         logger.info(f"Processing chat with prompt: {prompt}")
 
         # Format the prompt
-        formatted_prompt, original_prompt = self.promptFormatter(task="chatting", prompt=prompt)
+        formatted_prompt, original_prompt = self.prompts.promptFormatter(task="chatting", prompt=prompt)
 
         # Save user's prompt to database before being processed
         self.database.conversation_saver(
@@ -234,40 +237,6 @@ class ModelCore:
         except Exception as e:
             logger.error(f"Failed to generate response: {str(e)}")
             raise
-
-
-    def promptFormatter(self, task: str, prompt: [str], image_path: str = None) -> str:
-        """
-        Format the prompt for the model.
-
-        Args:
-            task: The task to format the prompt for
-            prompt: The prompt to format
-            image_path: The path to the image to analyze
-
-        Returns:
-            str: The formatted prompt
-        """
-        original_prompt = prompt
-
-        if task == "sumUpIdeas":
-            all_conversations = ""
-            for conversation in prompt[0]:
-                all_conversations += f"{conversation[1]}\n"
-            
-            prompt = f"""
-            Following is a long conversation that we had together about how to be a good designer. You, now, as a smart summarizer and designer,
-            are responsible for creating a short summary of all the very important ideas that are mentioned in the following conversations.
-            Avoid being verbose, rather focus on keeping all the ideas and explaining them very shortly. The important part for you is 
-            to mention all the ideas and summarize them perfectly.Here are the conversations: {all_conversations}
-            """
-        elif task == "generatingImageWithIdeas":
-            prompt = f"""
-            You are a designer. You are given a prompt and an idea. You need to generate an image based on the prompt and the idea.
-            Here is the prompt: {prompt[0]}
-            Here is the idea: {prompt[1]}
-            """
-        return prompt, original_prompt
 
 
     def loadOpenAIClient(self) -> OpenAI:

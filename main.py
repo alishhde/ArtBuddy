@@ -5,6 +5,7 @@ from src.core.database import DatabaseCore
 from src.core.logging_config import setup_logging
 from src.core.runner import Runner
 from src.core.tools import ImageAnalysisTool
+from src.core.prompts import Prompts
 
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -32,6 +33,10 @@ class ArtBuddy:
         # ==== Load Utils ==== #
         self.utils_loader()
         logger.info("Utils loaded!")
+
+        # ==== Load Prompts ==== #
+        self.prompts_loader()
+        logger.info("Prompts loaded!")
 
         # ==== Load Database ==== #
         self.database_handler()
@@ -87,13 +92,16 @@ class ArtBuddy:
     def utils_loader(self):
         logger.info("Loading Utils - - -")
         self.utils = Utils(verbose=self.verbose)
-        logger.info("Utils loaded!")
+
+
+    def prompts_loader(self):
+        logger.info("Loading Prompts - - -")
+        self.prompts = Prompts()
 
 
     def database_handler(self):
         logger.info("Loading Database - - -")
         self.database = DatabaseCore(verbose=self.verbose, database_type=self.database_type, database_path=self.database_path)
-        logger.info("Database loaded!")
 
 
     def model_handler(self):
@@ -105,9 +113,9 @@ class ArtBuddy:
             image_model_name=self.image_model_name,
             API_TOKEN=self.API_TOKEN,
             database=self.database,
+            prompts=self.prompts,
             verbose=self.verbose
             )
-        logger.info("Model loaded!")
         
 
     def tools_handler(self):
@@ -117,7 +125,6 @@ class ArtBuddy:
         image_analysis_tool = ImageAnalysisTool(model_handler=self.model)
 
         self.tools = [image_analysis_tool]
-        logger.info("Tools loaded!")
 
 
     def agent_handler(self):
@@ -129,9 +136,9 @@ class ArtBuddy:
             max_steps=self.max_steps, 
             verbosity_level=self.verbosity, 
             verbose=self.verbose,
-            database=self.database
+            database=self.database,
+            prompts=self.prompts
             )
-        logger.info("Agent loaded!")
 
 
     def run(self):
@@ -146,6 +153,7 @@ class ArtBuddy:
                         agent=self.agent,
                         database=self.database,
                         utils=self.utils,
+                        prompts=self.prompts,
                         verbose=self.verbose)
 
         response = runner.run(mode=mode,
