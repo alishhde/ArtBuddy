@@ -87,11 +87,11 @@ class ModelCore:
             image_url = response.data[0].url
 
             # Save the image to the local directory
-            self.utils.imgSaver(image_url=image_url, formatted_prompt=formatted_prompt, save_path=save_path)
+            path_to_image = self.utils.imgSaver(image_url=image_url, formatted_prompt=formatted_prompt, save_path=save_path)
             logger.info(f"Image saved successfully to {save_path}")
 
             # Encode the generated image to base64
-            base64_image = self.utils.encode_image(image_path=save_path)
+            base64_image = self.utils.encode_image(image_path=path_to_image)
 
             # Save the generated image to database
             self.database.conversation_saver(
@@ -103,12 +103,12 @@ class ModelCore:
             )
             logger.info("Generated image saved to database")
 
-            return image_url, save_path
+            return path_to_image
         except Exception as e:
             logger.error(f"Failed to generate image: {str(e)}")
             raise
 
-            
+
     def chattingImage(self, prompt: str, image_path: str) -> str:
         """
         Generate a response from the model.
@@ -236,7 +236,7 @@ class ModelCore:
             raise
 
 
-    def promptFormatter(self, task: str, prompt: str, image_path: str = None) -> str:
+    def promptFormatter(self, task: str, prompt: [str], image_path: str = None) -> str:
         """
         Format the prompt for the model.
 
@@ -250,6 +250,23 @@ class ModelCore:
         """
         original_prompt = prompt
 
+        if task == "sumUpIdeas":
+            all_conversations = ""
+            for conversation in prompt[0]:
+                all_conversations += f"{conversation[1]}\n"
+            
+            prompt = f"""
+            Following is a long conversation that we had together about how to be a good designer. You, now, as a smart summarizer and designer,
+            are responsible for creating a short summary of all the very important ideas that are mentioned in the following conversations.
+            Avoid being verbose, rather focus on keeping all the ideas and explaining them very shortly. The important part for you is 
+            to mention all the ideas and summarize them perfectly.Here are the conversations: {all_conversations}
+            """
+        elif task == "generatingImageWithIdeas":
+            prompt = f"""
+            You are a designer. You are given a prompt and an idea. You need to generate an image based on the prompt and the idea.
+            Here is the prompt: {prompt[0]}
+            Here is the idea: {prompt[1]}
+            """
         return prompt, original_prompt
 
 

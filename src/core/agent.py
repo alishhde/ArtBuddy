@@ -42,6 +42,7 @@ class AgentCore:
         self.serverModel = self.loadModel()
         self.tools = tools
         self.database = database
+        self.utils = utils
         self.managerAgent = self.agentManager(planning_interval, verbosity_level, max_steps)
         logger.info("AgentCore initialized successfully!")
 
@@ -59,7 +60,7 @@ class AgentCore:
         logger.info("Initializing agent manager...")
         agent = CodeAgent(
             model=self.serverModel,
-            tools=[],
+            tools=self.tools,
             managed_agents=[
                 self.WebAgent(max_steps, verbosity_level)
             ],
@@ -98,9 +99,104 @@ class AgentCore:
             prompt: The prompt to use.
             history: The history of the conversation.
         """
-        logger.info(f"Running agent with prompt: {prompt}")
-        result = self.managerAgent.run(prompt, history)
+        # Format the prompt
+        formatted_prompt, original_prompt = self.model_handler.promptFormatter(task="chatting", prompt=prompt)
+
+        # Save user's prompt to database before being processed
+        self.database.conversation_saver(
+            data={
+                'role': 'user',
+                'text': original_prompt
+            },
+            data_table='conversations'
+        )
+        logger.info(f"User's original prompt saved to database")
+
+        logger.info(f"Running agent with prompt: {formatted_prompt}")
+        result = self.managerAgent.run(formatted_prompt, history)
         logger.info("Agent execution completed")
+
+        # Save system's response to database
+        self.database.conversation_saver(
+            data={
+                'role': 'system',
+                'text': result
+            },
+            data_table='conversations'
+        )
+        logger.info(f"System's response saved to database")
+        return result
+
+
+    def runImageAgent(self, prompt: str, image_path: str, history: list[str] = None) -> str:
+        """
+        Run the agent with an image.
+
+        Args:
+            prompt: The prompt to use.
+            image_path: Path to the image file.
+            history: The history of the conversation.
+        """
+        # Format the prompt
+        formatted_prompt, original_prompt = self.model_handler.promptFormatter(task="chattingImage", prompt=prompt, image_path=image_path)
+
+        # Save user's prompt to database before being processed
+        self.database.conversation_saver(
+            data={
+                'role': 'user',
+                'text': original_prompt
+            },
+            data_table='conversations'
+        )
+        logger.info(f"User's original prompt saved to database")
+
+
+        logger.info(f"Running image agent with prompt: {prompt}")
+        logger.info(f"Using image from path: {image_path}")
+
+        # Create a prompt that instructs the agent to use the image analysis tool
+        agent_prompt = f"""
+        You are an AI assistant that can analyze images. You have access to an image analysis tool.
+
+        The user has provided an image at this path: {image_path}
+        Their question about the image is: {prompt}
+
+        To analyze the image, you should:
+        1. Use the image_analysis tool with the image path and the user's question
+        2. The tool will return an analysis of the image
+        3. Use that analysis to provide a helpful response to the user's question
+
+        Remember to:
+        - Be specific about what you see in the image
+        - Address the user's question directly
+        - Provide insights and explanations based on the image analysis
+        - Defend your answer
+        """
+
+        # Save agent's prompt to database before being processed
+        self.database.conversation_saver(
+            data={
+                'role': 'agent',
+                'text': agent_prompt
+            },
+            data_table='conversations'
+        )
+        logger.info(f"Agent's prompt saved to database")
+
+
+        # Run the agent with the formatted prompt
+        result = self.managerAgent.run(agent_prompt, history or [])
+        logger.info("Image agent execution completed")
+
+        # Save system's response to database
+        self.database.conversation_saver(
+            data={
+                'role': 'system',
+                'text': result
+            },
+            data_table='conversations'
+        )
+        logger.info(f"System's response saved to database")
         return result
 
 

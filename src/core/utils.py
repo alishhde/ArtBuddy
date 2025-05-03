@@ -44,6 +44,7 @@ class Utils:
         
         with open(save_path, 'wb') as f:
             f.write(response.content)
+        return save_path
 
 
     def encode_image(self, image_path: str) -> str:

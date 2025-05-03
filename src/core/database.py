@@ -40,7 +40,7 @@ class DatabaseCore:
         return db
 
 
-    def conversation_retriever(self, data_table: str="conversations", date: str=None, exclude_image: bool=False, exclude_text: bool=False, role: str=None):
+    def conversation_retriever(self, basedOnDate: bool=False, top_k: int=20, data_table: str="conversations", date: str=None, exclude_image: bool=False, exclude_text: bool=False, role: str=None):
         """Return the data from the database in chronological order (oldest to newest)
 
         Args:
@@ -75,26 +75,53 @@ class DatabaseCore:
                 columns.append("image")
             
             columns_str = ", ".join(columns)
-            
-            # Build WHERE clause
-            where_clauses = []
-            params = []
-            
-            if date is not None:
-                where_clauses.append("date >= ?")
-                params.append(date)
-            
-            if role is not None:
-                where_clauses.append("role = ?")
-                params.append(role)
-            
-            where_str = " AND ".join(where_clauses) if where_clauses else ""
-            query = f"SELECT {columns_str} FROM {data_table}"
-            if where_str:
-                query += f" WHERE {where_str}"
-            query += " ORDER BY date ASC"
 
-            cursor.execute(query, tuple(params))
+            # If basedOnDate is False, retrieve the top_k user messages
+            if not basedOnDate:
+                # First, get the date of the top_kth user message
+                cursor.execute(f"""
+                    SELECT date 
+                    FROM {data_table} 
+                    WHERE role = 'user' 
+                    ORDER BY date DESC 
+                    LIMIT 1 OFFSET {top_k - 1}
+                """)
+                from_date = cursor.fetchone()
+                
+                if from_date is None:
+                    # If we don't have top_k user messages, get all messages
+                    cursor.execute(f"""
+                        SELECT {columns_str} 
+                        FROM {data_table} 
+                        ORDER BY date ASC
+                    """)
+                else:
+                    # Get all messages from the top_kth user message onwards
+                    cursor.execute(f"""
+                        SELECT {columns_str} 
+                        FROM {data_table} 
+                        WHERE date >= ? 
+                        ORDER BY date ASC
+                    """, (from_date[0],))
+            else:
+                # Build WHERE clause
+                where_clauses = []
+                params = []
+                
+                if date is not None:
+                    where_clauses.append("date >= ?")
+                    params.append(date)
+                
+                if role is not None:
+                    where_clauses.append("role = ?")
+                    params.append(role)
+                
+                where_str = " AND ".join(where_clauses) if where_clauses else ""
+                query = f"SELECT {columns_str} FROM {data_table}"
+                if where_str:
+                    query += f" WHERE {where_str}"
+                query += " ORDER BY date ASC"
+                cursor.execute(query, tuple(params))
 
             # Fetch all results
             results = cursor.fetchall()
@@ -192,42 +219,26 @@ class DatabaseCore:
             raise e
 
 
-    def idea_retriever(self, date: str=None, data_table: str="ideas", since_date: bool=False, at_date: bool=False):
-        """Retrieve ideas from the database
+    def idea_retriever(self, num_rows: int=4, data_table: str="ideas"):
+        """Retrieve the most recent ideas from the database
 
         Args:
-            date (str): The date to retrieve ideas from
+            num_rows (int): Number of most recent rows to retrieve (default: 4)
             data_table (str): The table of the data to retrieve
-            since_date (bool): Whether to retrieve ideas since the date
-            at_date (bool): Whether to retrieve ideas at the date
 
         Returns:
-            list: List of tuples containing (id, date, idea) for each entry
+            list: List of dictionaries containing id, date, and ideas for each entry
         """
         try:
             cursor = self.db.cursor()
             
-            # Build the query based on parameters
-            query = f"SELECT id, date, idea FROM {data_table}"
-            params = []
+            # Build the query to get the most recent rows
+            query = f"SELECT id, date, idea FROM {data_table} ORDER BY date DESC LIMIT ?"
             
-            if date is not None:
-                if since_date:
-                    query += " WHERE date >= ?"
-                    params.append(date)
-                elif at_date:
-                    query += " WHERE date LIKE ?"
-                    params.append(f"{date}%")  # Match any time on that date
-                else:
-                    query += " WHERE date = ?"
-                    params.append(date)
-            
-            query += " ORDER BY date DESC"  # Most recent first
-            
-            cursor.execute(query, tuple(params))
+            cursor.execute(query, (num_rows,))
             results = cursor.fetchall()
             
-            # Convert results to list of tuples
+            # Convert results to list of dictionaries
             ideas = []
             for row in results:
                 # Split the idea text back into a list if it contains newlines
@@ -292,3 +303,12 @@ class DatabaseCore:
         except sqlite3.Error as e:
             logger.error(f"Error saving idea: {e}")
             return False
+
+
+    def __len__(self):
+        """Return the number of rows in the database
+
+        Returns:
+            int: The number of rows in the database
+        """
+        return self.db.execute("SELECT COUNT(*) FROM conversations").fetchone()[0]

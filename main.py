@@ -1,9 +1,10 @@
 from src.core.model import ModelCore
 from src.core.agent import AgentCore
-from src.core.tools import WebAgentTools
 from src.core.utils import Utils
 from src.core.database import DatabaseCore
 from src.core.logging_config import setup_logging
+from src.core.runner import Runner
+from src.core.tools import ImageAnalysisTool
 
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -47,6 +48,9 @@ class ArtBuddy:
         # ==== Load Agent ==== #
         self.agent_handler()
         logger.info("Agent loaded!")
+
+        # ==== Load Runner ==== #
+        self.run()
 
 
     def variableLoader(self):
@@ -107,14 +111,20 @@ class ArtBuddy:
         
 
     def tools_handler(self):
-        self.tools = []
+        logger.info("Loading Tools - - - ")
+
+        # Image Analysis Tool
+        image_analysis_tool = ImageAnalysisTool(model_handler=self.model)
+
+        self.tools = [image_analysis_tool]
+        logger.info("Tools loaded!")
 
 
     def agent_handler(self):
         logger.info("Loading Agent - - - ")
         self.agent = AgentCore(self.model, 
             utils=self.utils, 
-            tools=[], 
+            tools=self.tools, 
             planning_interval=self.planning_interval, 
             max_steps=self.max_steps, 
             verbosity_level=self.verbosity, 
@@ -122,6 +132,31 @@ class ArtBuddy:
             database=self.database
             )
         logger.info("Agent loaded!")
+
+
+    def run(self):
+        mode = "generatingImage"
+        user_prompt = "A cute horse playing with a ball while sky boarding."
+        img_path = None
+
+        agent_mode = False
+        use_ideas = False
+
+        runner = Runner(model=self.model,
+                        agent=self.agent,
+                        database=self.database,
+                        utils=self.utils,
+                        verbose=self.verbose)
+
+        response = runner.run(mode=mode,
+                              agent_mode=agent_mode,
+                              user_prompt=user_prompt,
+                              use_ideas=use_ideas,
+                              img_path=img_path)
+
+        # Sum up ideas every 10 conversations
+        if len(self.database) % 10 == 0:
+            runner.sumUpIdeas(top_k=10)
 
 
 if __name__ == "__main__":
