@@ -2,7 +2,10 @@
 
 class Prompts:
     def __init__(self):
-        
+        pass
+
+
+    def agentPromptTemplate(self, image_path: str, prompt: str):
         self.agentPromptTemplate = f"""
         You are an AI assistant that can analyze images. You have access to an image analysis tool.
 
@@ -20,6 +23,7 @@ class Prompts:
         - Provide insights and explanations based on the image analysis
         - Defend your answer
         """
+        return self.agentPromptTemplate
 
 
     def promptFormatter(self, task: str, prompt: [str], image_path: str = None) -> str:
@@ -53,4 +57,18 @@ class Prompts:
             Here is the prompt: {prompt[0]}
             Here is the idea: {prompt[1]}
             """
+        elif task == "chattingImage":
+            prompt = f"""
+            You are a designer. You are given a prompt and an image. You need to analyze the image and provide a response to the prompt.
+            Here is the prompt: {prompt[0]}
+            Here is the image: {image_path}
+            """
+            
+        elif task == "chattingImageAgent":
+            prompt = f"""
+            You are a designer. You are given a prompt and an image. You need to analyze the image and provide a response to the prompt.
+            Here is the prompt: {prompt[0]}
+            Here is the image: {image_path}
+            """
+            
         return prompt, original_prompt

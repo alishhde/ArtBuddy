@@ -156,15 +156,54 @@ class ArtBuddy:
                         prompts=self.prompts,
                         verbose=self.verbose)
 
-        response = runner.run(mode=mode,
-                              agent_mode=agent_mode,
-                              user_prompt=user_prompt,
-                              use_ideas=use_ideas,
-                              img_path=img_path)
+        #### ----- Image Generation ----- ####
+        # Basic image generation
+        runner.run(
+            mode="generatingImage",
+            user_prompt="A beautiful sunset over mountains",
+            use_ideas=False
+        )
+
+        # Image generation with ideas from previous conversations
+        # runner.run(
+        #     mode="generatingImage",
+        #     user_prompt="Create an abstract painting",
+        #     use_ideas=True
+        # )
+
+        #### ----- Image Analysis ----- ####
+        # runner.run(
+        #     mode="chattingImage",
+        #     user_prompt="What is the main subject of this image?",
+        #     img_path="data/imgs/squire.jpg"
+        # )
+
+        # Agent-based image analysis (more sophisticated analysis)
+        # runner.run(
+        #     mode="chattingImage",
+        #     agent_mode=True,
+        #     user_prompt="Analyze the composition and color theory in this image",
+        #     img_path="data/imgs/squire.jpg"
+        # )
+
+        #### ----- Chatting ----- ####
+        # Basic chat
+        # runner.run(
+        #     mode="chatting",
+        #     user_prompt="Tell me about art history"
+        # )
+
+        # Agent-based chat (for complex queries and research)
+        runner.run(
+            mode="chatting",
+            agent_mode=True,
+            user_prompt="Research modern art movements and their influence on contemporary design"
+        )
+
 
         # Sum up ideas every 10 conversations
         if len(self.database) % 10 == 0:
-            runner.sumUpIdeas(top_k=10)
+            runner.sumUpIdeas(top_k=10, exclude_image=True)
 
 
 if __name__ == "__main__":

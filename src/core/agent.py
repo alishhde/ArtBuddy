@@ -158,7 +158,7 @@ class AgentCore:
         logger.info(f"Using image from path: {image_path}")
 
         # Create a prompt that instructs the agent to use the image analysis tool
-        agent_prompt = self.prompts.agentPromptTemplate
+        agent_prompt = self.prompts.agentPromptTemplate(prompt=prompt, image_path=image_path)
 
         # Save agent's prompt to database before being processed
         self.database.conversation_saver(

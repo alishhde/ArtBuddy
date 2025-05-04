@@ -92,12 +92,12 @@ class Runner:
         return self.model.chatting(user_prompt)
 
 
-    def sumUpIdeas(self, top_k: int=100):
+    def sumUpIdeas(self, top_k: int=100, exclude_image: bool=True):
         """
         Sum up the ideas from the database. every top_k conversations, save their sum up to the ideas database.
         """
         logger.info("Summing up ideas")
-        top_k_conversations = self.database.conversation_retriever(basedOnDate=True, top_k=top_k, exclude_image=True)
+        top_k_conversations = self.database.conversation_retriever(basedOnDate=True, top_k=top_k, exclude_image=exclude_image)
         
         # Calling model to sum up the text and return a prompt shape ideas of everything discussed in the conversations
         prompt_with_conversations, _ = self.prompts.promptFormatter(task="sumUpIdeas", prompt=top_k_conversations)
